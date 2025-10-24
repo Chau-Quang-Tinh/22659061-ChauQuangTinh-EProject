@@ -1,0 +1,84 @@
+version: "3.9"
+
+services:
+  # === MongoDB ===
+  mongodb:
+    image: mongo:5.0
+    container_name: mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    restart: always
+
+  # === RabbitMQ ===
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    restart: always
+
+  # === Auth Service ===
+  auth:
+    build: ./auth
+    container_name: auth
+    ports:
+      - "3000:3000"
+    environment:
+      - MONGODB_AUTH_URI=mongodb://mongodb:27017/authdb
+      - JWT_SECRET=secret
+    depends_on:
+      - mongodb
+    restart: always
+
+  # === Order Service ===
+  order:
+    build: ./order
+    container_name: order
+    ports:
+      - "3002:3002"
+    environment:
+      - MONGODB_ORDER_URI=mongodb://mongodb:27017/orderdb
+      - JWT_SECRET=secret
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
+    depends_on:
+      - mongodb
+      - rabbitmq
+    restart: always
+
+  # === Product Service ===
+  product:
+    build: ./product
+    container_name: product
+    ports:
+      - "3001:3001"
+    environment:
+      - MONGODB_PRODUCT_URI=mongodb://mongodb:27017/productdb
+      - ORDER_SERVICE_URL=http://order:3002
+      - JWT_SECRET=secret
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
+    depends_on:
+      - mongodb
+      - order
+      - rabbitmq
+    restart: always
+
+  # === API Gateway ===
+  api-gateway:
+    build: ./api-gateway
+    container_name: api-gateway
+    ports:
+      - "3003:3003"
+    depends_on:
+      - auth
+      - product
+      - order
+    restart: always
+
+volumes:
+  mongo-data:
